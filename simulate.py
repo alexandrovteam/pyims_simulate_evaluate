@@ -104,7 +104,7 @@ class sim_data():
                     mzs = thisSpectrum[0]
                     intensities = thisSpectrum[1]
                     # don't store zeros
-                    zer_idx = mzs!=0
+                    zer_idx = mzs>0
                     mzs = mzs[zer_idx]
                     intensities=intensities[zer_idx]
                     imzml.addSpectrum(mzs, intensities, pos)
