@@ -51,7 +51,7 @@ def score_spatial(template_im,test_im):
     return scores
 
 
-class eval():
+class Evaluate():
     """
     Class for comparing spatial metaboloics annotations against a ground truth.
     Designed for data built with the simulator from pyims_simulate_evaluate
