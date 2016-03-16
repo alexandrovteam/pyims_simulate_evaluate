@@ -69,6 +69,7 @@ class sim_data():
         tran += noise_factor*np.random.randn(len(tran))
         intensities = np.fft.ifft(tran[0:int(s_fac*len(tran))])
         intensities = np.abs(intensities)
+        intensities -= np.median(intensities)
         return intensities
 
     def simulate_spectrum(self,peakList):
@@ -80,25 +81,25 @@ class sim_data():
             intensityVect = self.simulate_orbitrap(intensityVect)
         return self.resample_mz, intensityVect
 
-    def generate_spectrum(self,x,y,mode='centroid'):
+    def generate_spectrum(self,x,y,mode='centroid', cent_kwargs={}):
         peakList = self.get_peaks(x,y)
         mzs,intensities = self.simulate_spectrum(peakList)
         if mode=='centroid':
-            from pyMS.centroid_detection import gradient
-            from pyMS import smoothing
-            intensities = smoothing.fast_change(mzs,intensities)
+            from pyMSpec.centroid_detection import gradient
+            from pyMSpec import smoothing
+            mzs, intensities = smoothing.fast_change(mzs,intensities)
             #intensities[intensities<0.015] = 0
-            mzs,intensities,_ = gradient(np.asarray(mzs),np.asarray(intensities),weighted_bins=1,grad_type="diff")
+            mzs,intensities,_ = gradient(np.asarray(mzs),np.asarray(intensities), **cent_kwargs)
         return mzs,intensities
 
-    def simulate_dataset(self):
+    def simulate_dataset(self,mode='centroid'):
         from pyimzml.ImzMLWriter import ImzMLWriter
         #imzml = self.open_imzml(self.output_filename)
         with ImzMLWriter(self.output_filename, mz_dtype=np.float32, intensity_dtype=np.float32) as imzml:
             for x in range(self.n_x):
                 print x
                 for y in range(self.n_y):
-                    thisSpectrum = self.generate_spectrum(x,y)
+                    thisSpectrum = self.generate_spectrum(x,y, mode=mode, cent_kwargs = self.ms_info['cent_kwargs'])
                     pos = (x, y, 0)
                     mzs = thisSpectrum[0]
                     intensities = thisSpectrum[1]
