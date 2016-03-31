@@ -1,6 +1,6 @@
 __author__ = 'palmer'
 import numpy as np
-ms_types = ['orbitrap',]
+ms_types = ['orbitrap','tof']
 class sim_data():
     def __init__(self,output_filename,layers,ms_info):
         assert ms_info["ms_type"] in ms_types, "ms_type not in {}".format(ms_types)
@@ -11,7 +11,11 @@ class sim_data():
         self.n_y,self.n_x = np.shape(layers['layers_list'][layer_names[0]]['image'])
         self.base_mz = self.generate_base_mz()
         s_fac = self.ms_info["sample_scale_factor"]
-        self.resample_mz = self.resample_mz(self.base_mz,s_fac)
+        if self.ms_info["ms_type"] == 'orbitrap':
+            self.resample_mz = self.resample_mz(self.base_mz,s_fac)
+        elif self.ms_info["ms_type"] == 'tof':
+            self.resample_mz = self.base_mz
+
 
     def resample_mz(self,base_mz,s_fac):
         baseLen = len(base_mz)
@@ -22,12 +26,15 @@ class sim_data():
         return mzs
 
     def generate_base_mz(self):
+        min_mz = self.ms_info["min_mz"]
+        max_mz = self.ms_info["max_mz"]
         if self.ms_info["ms_type"] == 'orbitrap':
             n_samples = self.ms_info["n_samples"]
-            min_mz = self.ms_info["min_mz"]
-            max_mz = self.ms_info["max_mz"]
             s_fac = self.ms_info["sample_scale_factor"]
             mzs = np.square(np.linspace(np.sqrt(min_mz),np.sqrt(max_mz),n_samples))
+        elif self.ms_info["ms_type"] == 'tof':
+            delta_mz = self.ms_info["delta_mz"]
+            mzs = np.square(np.arange(np.sqrt(min_mz),np.sqrt(max_mz), delta_mz))
         return mzs
 
     def get_pixel_mzs_abundances(self,x,y):
@@ -72,6 +79,13 @@ class sim_data():
         intensities -= np.median(intensities)
         return intensities
 
+    def simulate_tof(self, intensities):
+        from scipy.ndimage.filters import gaussian_filter1d
+        sigma = self.ms_info["sigma"]
+        intensities = gaussian_filter1d(intensities, sigma)
+        intensities = 0.5*np.sqrt(intensities)*np.random.randn(len(intensities))+intensities
+        return np.floor(intensities)
+
     def simulate_spectrum(self,peakList):
         mzs = peakList[0]
         intensities = peakList[1]
@@ -79,6 +93,8 @@ class sim_data():
         intensityVect = np.bincount(mz_idx,weights=intensities,minlength=len(self.base_mz))
         if self.ms_info["ms_type"] == 'orbitrap':
             intensityVect = self.simulate_orbitrap(intensityVect)
+        elif self.ms_info["ms_type"] == 'tof':
+            intensityVect = self.simulate_tof(intensityVect)
         return self.resample_mz, intensityVect
 
     def generate_spectrum(self,x,y,mode='centroid', cent_kwargs={}):
@@ -88,9 +104,12 @@ class sim_data():
             from pyMSpec.centroid_detection import gradient
             from pyMSpec import smoothing
             mzs, intensities = smoothing.fast_change(mzs,intensities)
-            #intensities[intensities<0.015] = 0
             mzs,intensities,_ = gradient(np.asarray(mzs),np.asarray(intensities), **cent_kwargs)
-        return mzs,intensities
+            return mzs,intensities
+        elif mode=='profile':
+            return mzs,intensities
+        else:
+            raise ValueError("{} not recognised mode".format(mode))
 
     def simulate_dataset(self,mode='centroid'):
         from pyimzml.ImzMLWriter import ImzMLWriter
